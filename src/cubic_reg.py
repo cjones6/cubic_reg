@@ -4,7 +4,7 @@ import scipy.linalg
 
 
 class CubicRegularization():
-    def __init__(self, x0, f=None, gradient=None, hessian=None, L=None, L0=None, kappa_easy=0.1, maxiter=1000, conv_tol=1e-5, epsilon=np.sqrt(np.finfo(float).eps)):
+    def __init__(self, x0, f=None, gradient=None, hessian=None, L=None, L0=None, kappa_easy=0.0001, maxiter=1000, conv_tol=1e-5, epsilon=np.sqrt(np.finfo(float).eps)):
         """
         :param gradient: function that returns the gradient
         :param hessian: function that returns the hessian
@@ -28,7 +28,7 @@ class CubicRegularization():
             self.hessian = hessian
         else:
             self.hessian = self.approx_hess(f)
-        self.lambda_nplus = self.compute_lambda_nplus()
+        self.lambda_nplus = self.compute_lambda_nplus(self.x0)
 
     @staticmethod
     def std_basis(size, idx):
@@ -41,10 +41,11 @@ class CubicRegularization():
 
     def approx_hess(self, f):
         pass
+        #raise NotImplementedError
 
-    def compute_lambda_nplus(self):
-        lambda_n = scipy.linalg.eigh(self.hessian, eigvals_only=True, eigvals=0)
-        return max(-lambda_n, 0)
+    def compute_lambda_nplus(self, x):
+        lambda_n = scipy.linalg.eigh(self.hessian(x), eigvals_only=True, eigvals=(0, 0))
+        return max(-lambda_n[0], 0)
 
     def check_convergence(self, x_new):
         if np.linalg.norm(self.gradient(x_new))**2 <= self.conv_tol:
@@ -54,21 +55,25 @@ class CubicRegularization():
 
     def cubic_reg(self):
         k = 0
-        converged = 0
+        converged = False
         x_new = self.x0
         mk = self.L0
+        intermediate_points = [x_new]
         while k < self.maxiter and converged is False:
             x_old = x_new
             x_new, mk = self.find_x_new(mk, x_old)
+            self.lambda_nplus = self.compute_lambda_nplus(x_new)
             converged = self.check_convergence(x_new)
+            intermediate_points.append(x_new)
+        return x_new, intermediate_points
 
     def find_x_new(self, mk, x_old):
         if self.L is not None:
             aux_problem = AuxiliaryProblem(x_old, self.gradient, self.hessian, self.L, self.lambda_nplus, self.kappa_easy)
             x_new = aux_problem.solve()
-            return x_new
+            return x_new, self.L
         else:
-            raise(NotImplementedError)
+            raise NotImplementedError
 
 
 class AuxiliaryProblem():
@@ -79,7 +84,7 @@ class AuxiliaryProblem():
         self.M = M
         self.lambda_nplus = lambda_nplus
         self.kappa_easy = kappa_easy
-        self.H_lambda = lambda x: self.hessian+x*np.identity(np.size(self.hessian, 0))
+        self.H_lambda = lambda x: self.hessian(self.x)+x*np.identity(np.size(self.hessian(self.x), 0))
 
     def eigendecomposition(self):
         eig_vals, V = np.linalg.eigh(self.hessian)
@@ -90,25 +95,26 @@ class AuxiliaryProblem():
 
     def compute_s(self, lambduh):
         L = scipy.linalg.cholesky(self.H_lambda(lambduh))
-        s = scipy.linalg.cho_solve((L, False), -self.gradient)
+        s = scipy.linalg.cho_solve((L, False), -self.gradient(self.x))
         return s, L
 
     def update_lambda(self, lambduh, s, L):
-        w = scipy.linalg.solve_triangular(L, s)
+        w = scipy.linalg.solve_triangular(L.T, s, lower=True)
         norm_s = np.linalg.norm(s)
         phi = 1/norm_s-self.M/(2*lambduh)
-        phi_prime = np.linalg.norm(w)**2/(norm_s**3)-self.M/(2*lambduh**2)
+        phi_prime = np.linalg.norm(w)**2/(norm_s**3)+self.M/(2*lambduh**2)
         return lambduh - phi/phi_prime
 
     def converged(self, s, lambduh):
         r = 2*lambduh/self.M
-        if abs(np.linalg.norm(s)-r) <= self.kappa_easy*r:
+        if abs(np.linalg.norm(s)-r) <= self.kappa_easy:  # TODO choose better convergence criterion
             return True
         else:
             return False
 
-    def compute_lambduh(self):
-        lambduh = 0 if self.lambda_nplus==0 else self.lambda_nplus+0.00001  # TODO not sure if the sign here is correct
+    def compute_lambduh(self, lambda_const=0.00001):
+        #lambduh = 0 if self.lambda_nplus==0 else self.lambda_nplus+0.00001
+        lambduh = self.lambda_nplus+lambda_const
         s, L = self.compute_s(lambduh)
         r = 2*lambduh/self.M
         if np.linalg.norm(s) <= r:
@@ -126,7 +132,7 @@ class AuxiliaryProblem():
     def solve(self):
         lambduh, s, hard_case = self.compute_lambduh()
         if not hard_case:
-            h = np.linalg.solve(self.H_lambda(lambduh), -self.gradient)
+            h = np.linalg.solve(self.H_lambda(lambduh), -self.gradient(self.x))
             return h+self.x
         else:
             raise NotImplementedError
