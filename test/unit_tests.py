@@ -10,17 +10,17 @@ class TestInitializations(unittest.TestCase):
         self.grad = lambda x: np.asarray([2*x[0]*x[1]**2+2*x[0], 2*x[0]**2*x[1]+2*x[1]])
         self.hess = lambda x: np.asarray([[2*x[1]**2+2, 4*x[0]*x[1]], [4*x[0]*x[1], 2*x[0]**2+2]])
         self.x0 = [1,2]
-        # self.cr = src.cubic_reg.CubicRegularization(self.x0, self.f)
+        self.cr = src.cubic_reg.CubicRegularization(self.x0, self.f)
 
-    # def test_gradient(self):
-    #     self.assertAlmostEqual(self.grad(self.x0)[0], self.cr.gradient(self.x0)[0], places=5)
-    #     self.assertAlmostEqual(self.grad(self.x0)[1], self.cr.gradient(self.x0)[1], places=5)
-    #
-    # def test_hessian(self):
-    #     self.assertAlmostEqual(self.hess(self.x0)[0,0], self.cr.hessian(self.x0)[0,0], places=5)
-    #     self.assertAlmostEqual(self.hess(self.x0)[0,1], self.cr.hessian(self.x0)[0,1], places=5)
-    #     self.assertAlmostEqual(self.hess(self.x0)[1,0], self.cr.hessian(self.x0)[1,0], places=5)
-    #     self.assertAlmostEqual(self.hess(self.x0)[1,1], self.cr.hessian(self.x0)[1,1], places=5)
+    def test_gradient(self):
+        self.assertAlmostEqual(self.grad(self.x0)[0], self.cr.gradient(self.x0)[0], places=5)
+        self.assertAlmostEqual(self.grad(self.x0)[1], self.cr.gradient(self.x0)[1], places=5)
+
+    def test_hessian(self):
+        self.assertAlmostEqual(self.hess(self.x0)[0,0], self.cr.hessian(self.x0)[0,0], places=5)
+        self.assertAlmostEqual(self.hess(self.x0)[0,1], self.cr.hessian(self.x0)[0,1], places=5)
+        self.assertAlmostEqual(self.hess(self.x0)[1,0], self.cr.hessian(self.x0)[1,0], places=5)
+        self.assertAlmostEqual(self.hess(self.x0)[1,1], self.cr.hessian(self.x0)[1,1], places=5)
 
     def test_lambdaplus(self):
         self.cr = src.cubic_reg.CubicRegularization(self.x0, self.f, gradient=self.grad, hessian=self.hess)
@@ -48,9 +48,21 @@ class TestCubicReg(unittest.TestCase):
         self.grad = lambda x: np.asarray([2 * x[0] * x[1] ** 2 + 2 * x[0], 2 * x[0] ** 2 * x[1] + 2 * x[1]])
         self.hess = lambda x: np.asarray([[2 * x[1] ** 2 + 2, 4 * x[0] * x[1]], [4 * x[0] * x[1], 2 * x[0] ** 2 + 2]])
         self.x0 = [1, 2]
-        self.cr = src.cubic_reg.CubicRegularization(self.x0, self.f, L=2, gradient=self.grad, hessian=self.hess)
 
     def test_cr(self):
+        self.cr = src.cubic_reg.CubicRegularization(self.x0, self.f, L=2, gradient=self.grad, hessian=self.hess)
         x_new, intermediate_points = self.cr.cubic_reg()
         self.assertAlmostEqual(0, x_new[0], places=4)
         self.assertAlmostEqual(0, x_new[1], places=4)
+
+    def test_cr_L0_given(self):
+        self.cr = src.cubic_reg.CubicRegularization(self.x0, self.f, L0=0.01, gradient=self.grad, hessian=self.hess)
+        x_new, intermediate_points = self.cr.cubic_reg()
+        self.assertAlmostEqual(0, x_new[0], places=3)
+        self.assertAlmostEqual(0, x_new[1], places=3)
+
+    def test_cr_L0_bound(self):
+        self.cr = src.cubic_reg.CubicRegularization(self.x0, self.f, gradient=self.grad, hessian=self.hess)
+        x_new, intermediate_points = self.cr.cubic_reg()
+        self.assertAlmostEqual(0, x_new[0], places=3)
+        self.assertAlmostEqual(0, x_new[1], places=3)
