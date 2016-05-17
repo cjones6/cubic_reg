@@ -41,7 +41,7 @@ class CubicRegularization():
         return ei
 
     def approx_grad(self, x):
-        return [(self.f(x+self.epsilon*self.std_basis(self.n, i))-self.f(x-self.epsilon*self.std_basis(self.n, i)))/(2*self.epsilon) for i in range(0, self.n)]
+        return np.asarray([(self.f(x+self.epsilon*self.std_basis(self.n, i))-self.f(x-self.epsilon*self.std_basis(self.n, i)))/(2*self.epsilon) for i in range(0, self.n)])
 
     def approx_hess(self, x):
         grad_x0 = self.gradient(x)
@@ -101,6 +101,7 @@ class AuxiliaryProblem():
         self.lambda_nplus = lambda_nplus
         self.kappa_easy = kappa_easy
         self.H_lambda = lambda x: self.hessian(self.x)+x*np.identity(np.size(self.hessian(self.x), 0))
+        self.lambda_const = (1+self.lambda_nplus)*np.sqrt(np.finfo(float).eps)
 
     def eigendecomposition(self):
         eig_vals, V = np.linalg.eigh(self.hessian)
@@ -110,7 +111,12 @@ class AuxiliaryProblem():
         return np.linalg.solve(self.eigenvectors, self.gradient)
 
     def compute_s(self, lambduh):
-        L = scipy.linalg.cholesky(self.H_lambda(lambduh))
+        try:
+            L = scipy.linalg.cholesky(self.H_lambda(lambduh))
+        except:
+            # See p. 516 of Solving the Trust-Region Problem using the Lanczos Method by Gould, Lucidi, Roma, Toint (1999)
+            self.lambda_const *= 2
+            s, L = self.compute_s(self.lambda_nplus+self.lambda_const)
         s = scipy.linalg.cho_solve((L, False), -self.gradient(self.x))
         return s, L
 
@@ -128,8 +134,11 @@ class AuxiliaryProblem():
         else:
             return False
 
-    def compute_lambduh(self, lambda_const=0.00001):
-        lambduh = 0 if self.lambda_nplus == 0 else self.lambda_nplus+lambda_const
+    def compute_lambduh(self):
+        if self.lambda_nplus == 0:
+            lambduh = 0
+        else:
+            lambduh = self.lambda_nplus + self.lambda_const
         s, L = self.compute_s(lambduh)
         r = 2*lambduh/self.M
         if np.linalg.norm(s) <= r:
@@ -139,7 +148,7 @@ class AuxiliaryProblem():
             else:
                 raise NotImplementedError
         if lambduh == 0:
-            lambduh += lambda_const
+            lambduh += self.lambda_const
         while not self.converged(s, lambduh):
             lambduh = self.update_lambda(lambduh, s, L)  # TODO fix this so it doesn't run forever if it doesn't converge
             s, L = self.compute_s(lambduh)

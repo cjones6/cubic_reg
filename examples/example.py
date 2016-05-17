@@ -34,11 +34,27 @@ class NiceFunction():
         plt.ylabel('Function value')
         plt.savefig('function_vs_iter.png')
 
+
+class BadFunction():
+    def __init__(self):
+        self.f = lambda x: -(x[0] ** 2 + 3*x[1] ** 2)*np.exp(1-x[0] ** 2 - x[1] ** 2)
+        self.grad = None
+        self.hess = None
+        # self.grad = lambda x: np.asarray([2 * x[0] * x[1] ** 2 + 2 * x[0], 2 * x[0] ** 2 * x[1] + 2 * x[1]])
+        # self.hess = lambda x: np.asarray([[2 * x[1] ** 2 + 2, 4 * x[0] * x[1]], [4 * x[0] * x[1], 2 * x[0] ** 2 + 2]])
+        self.x0 = [1, 0.5]
+        self.cr = src.cubic_reg.CubicRegularization(self.x0, self.f, gradient=self.grad, hessian=self.hess)
+
+    def run(self):
+        x_new, intermediate_points = self.cr.cubic_reg()
+        return x_new, intermediate_points
+
 if __name__ == '__main__':
-    nf = NiceFunction()
+    #nf = NiceFunction()
+    nf = BadFunction()
     x, ip = nf.run()
-    nf.plot_points(ip)
-    nf.plot_func_value(ip)
+    # nf.plot_points(ip)
+    # nf.plot_func_value(ip)
     with open('example_path.txt', 'w') as outfile:
         for i in range(0, np.size(ip, 0)):
             outstr = str(ip[i][0])+'\t'+str(ip[i][1])+'\n'
