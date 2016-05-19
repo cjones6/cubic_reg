@@ -11,6 +11,8 @@ class CubicRegularization():
         :return:
         """
         self.f = f
+        self.gradient = gradient
+        self.hessian = hessian
         self.x0 = x0
         self.maxiter = maxiter
         self.conv_tol = conv_tol # Convergence tolerance
@@ -19,20 +21,41 @@ class CubicRegularization():
         self.L0 = L0
         self.kappa_easy = kappa_easy
         self.n = len(x0)
-        assert(f is not None or (gradient is not None and hessian is not None and L is not None))  # TODO convert to exception
 
+        self.check_inputs()
         # Estimate the gradient, hessian, and find a lower bound L0 for L if necessary
-        if gradient is not None:
-            self.gradient = gradient
-        else:
+        if gradient is None:
             self.gradient = self.approx_grad
-        if hessian is not None:
-            self.hessian = hessian
-        else:
+        if hessian is None:
             self.hessian = self.approx_hess
         if L0 is None and L is None:
             self.L0 = np.linalg.norm(self.hessian(self.x0)-self.hessian(self.x0+np.ones_like(self.x0)), ord=2)/np.linalg.norm(np.ones_like(self.x0))+self.epsilon
         self.lambda_nplus = self.compute_lambda_nplus(self.x0)
+
+    def check_inputs(self):
+        if not isinstance(self.x0, (tuple, list, np.ndarray)):
+            raise TypeError('Invalid input type for x0')
+        if len(self.x0) < 1:
+            raise ValueError('x0 must have length > 0')
+        if not (self.f is not None or (self.gradient is not None and self.hessian is not None and self.L is not None)):
+            raise AttributeError('You must specify f and/or each of the following: gradient, hessian, and L')
+        if not((not self.L or self.L > 0)and (not self.L0 or self.L0 > 0) and self.kappa_easy > 0 and self.maxiter > 0 and self.conv_tol > 0 and self.epsilon > 0):
+            raise ValueError('All inputs that are constants must be larger than 0')
+        if self.f is not None:
+            try:
+                self.f(self.x0)
+            except TypeError:
+                raise TypeError('x0 is not a valid input to function f')
+        if self.gradient is not None:
+            try:
+                self.gradient(self.x0)
+            except TypeError:
+                raise TypeError('x0 is not a valid input to the gradient. Is the gradient a function with input dimension length(x0)?')
+        if self.hessian is not None:
+            try:
+                self.hessian(self.x0)
+            except TypeError:
+                raise TypeError('x0 is not a valid input to the hessian. Is the hessian a function with input dimension length(x0)?')
 
     @staticmethod
     def std_basis(size, idx):
@@ -134,7 +157,7 @@ class AuxiliaryProblem():
         else:
             return False
 
-    def compute_lambduh(self):
+    def solve(self):
         if self.lambda_nplus == 0:
             lambduh = 0
         else:
@@ -143,26 +166,16 @@ class AuxiliaryProblem():
         r = 2*lambduh/self.M
         if np.linalg.norm(s) <= r:
             if lambduh == 0 or np.linalg.norm(s) == r:
-                hard_case = False
-                return lambduh, s, hard_case
+                return s+self.x
             else:
-                raise NotImplementedError
+                Lambda, U = np.linalg.eigh(self.H_lambda(self.lambda_nplus))
+                s_cri = -U.T.dot(np.linalg.pinv(np.diag(Lambda))).dot(U).dot(self.gradient(self.x))
+                alpha = max(np.roots([np.dot(U[:, 0], U[:, 0]), 2*np.dot(U[:, 0], s_cri), np.dot(s_cri, s_cri)-4*self.lambda_nplus**2/self.M**2]))
+                s = s_cri + alpha*U[:, 0]
+                return s+self.x
         if lambduh == 0:
             lambduh += self.lambda_const
         while not self.converged(s, lambduh):
             lambduh = self.update_lambda(lambduh, s, L)  # TODO fix this so it doesn't run forever if it doesn't converge
             s, L = self.compute_s(lambduh)
-        hard_case = False
-        return lambduh, s, hard_case
-
-    def solve(self):
-        lambduh, s, hard_case = self.compute_lambduh()
-        if not hard_case:
-            h = np.linalg.solve(self.H_lambda(lambduh), -self.gradient(self.x))
-            return h+self.x
-        else:
-            raise NotImplementedError
-
-
-
-
+        return s+self.x

@@ -1,4 +1,3 @@
-import json
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -42,7 +41,8 @@ class BadFunction():
         self.hess = None
         # self.grad = lambda x: np.asarray([2 * x[0] * x[1] ** 2 + 2 * x[0], 2 * x[0] ** 2 * x[1] + 2 * x[1]])
         # self.hess = lambda x: np.asarray([[2 * x[1] ** 2 + 2, 4 * x[0] * x[1]], [4 * x[0] * x[1], 2 * x[0] ** 2 + 2]])
-        self.x0 = [1, 0.5]
+        #self.x0 = [1, 0.5]
+        self.x0 = [1, 0]
         self.cr = src.cubic_reg.CubicRegularization(self.x0, self.f, gradient=self.grad, hessian=self.hess)
 
     def run(self):

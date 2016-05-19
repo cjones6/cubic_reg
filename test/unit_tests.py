@@ -66,3 +66,17 @@ class TestCubicReg(unittest.TestCase):
         x_new, intermediate_points = self.cr.cubic_reg()
         self.assertAlmostEqual(0, x_new[0], places=3)
         self.assertAlmostEqual(0, x_new[1], places=3)
+
+class TestHardCase(unittest.TestCase):
+    # Example 4 from p. 200 of Nesterov and Polyak's paper
+    def test_update(self):
+        x = [0, 0]
+        gradient = lambda x: np.array([-1, 0])
+        hessian = lambda x: np.array([[0, 0],[0, -1]])
+        M = 1
+        lambda_nplus = 1
+        kappa_easy = 0.0001
+        ap = src.cubic_reg.AuxiliaryProblem(x, gradient, hessian, M, lambda_nplus, kappa_easy)
+        x_new = ap.solve()
+        self.assertAlmostEqual(1, x_new[0], places=3)
+        self.assertAlmostEqual(np.sqrt(3), abs(x_new[1]), places=3)
