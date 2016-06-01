@@ -1,30 +1,51 @@
+"""
+This module implements cubic regularization of Newton's method, as described in Nesterov and Polyak (2006) and
+solves the cubic subproblem according to slight modifications of Algorithm 7.3.6 of Conn et. al (2000). It solves
+unconstrained minimization problems by minimizing a cubic upper bound to the function at each iteration.
+
+Implementation by Corinne Jones
+cjones6@uw.edu
+June 2016
+
+References:
+- Nesterov, Y., & Polyak, B. T. (2006). Cubic regularization of Newton method and its global performance.
+  Mathematical Programming, 108(1), 177-205.
+- Conn, A. R., Gould, N. I., & Toint, P. L. (2000). Trust region methods (Vol. 1). Siam.
+- Gould, N. I., Lucidi, S., Roma, M., & Toint, P. L. (1999). Solving the trust-region subproblem using the Lanczos
+  method. SIAM Journal on Optimization, 9(2), 504-525.
+"""
+
 from __future__ import division
 import numpy as np
 import scipy.linalg
 
 
 class CubicRegularization():
-    def __init__(self, x0, f=None, gradient=None, hessian=None, L=None, L0=None, kappa_easy=0.0001, maxiter=1000, conv_tol=1e-6, epsilon=2*np.sqrt(np.finfo(float).eps)):
+    def __init__(self, x0, f=None, gradient=None, hessian=None, L=None, L0=None, kappa_easy=0.0001, maxiter=10000, conv_tol=1e-5, conv_criterion='gradient', epsilon=2*np.sqrt(np.finfo(float).eps)):
         """
-
+        Collect all the inputs to the cubic regularization algorithm.
+        Required inputs: function or both gradient and Hessian. If you choose conv_criterion='Nesterov', you must also supply L.
         :param x0: Starting point for cubic regularization algorithm
         :param f: Function to be minimized
-        :param gradient: Gradient of f (input as a function)
-        :param hessian: Hessian of f (input as a function)
+        :param gradient: Gradient of f (input as a function that returns a numpy array)
+        :param hessian: Hessian of f (input as a function that returns a numpy array)
         :param L: Lipschitz constant on the Hessian
-        :param L0:
-        :param kappa_easy:
-        :param maxiter: Maximum number of cubic regularization iterations
-        :param conv_tol:
-        :param epsilon:
+        :param L0: Starting point for line search for M
+        :param kappa_easy: Convergence tolerance for the cubic subproblem
+        :param maxiter: Maximum number of cubic regularization iterations (also used for max number of subroutine iterations)
+        :param conv_tol: Convergence tolerance
+        :param conv_criterion: Criterion for convergence: 'gradient' or 'nesterov'. Gradient uses norm of gradient.
+                                Nesterov's uses max(sqrt(2/(L+M)norm(f'(x)), -2/(2L+M)lambda_min(f''(x))).
+        :param epsilon: Value added/subtracted from x when approximating gradients and Hessians
         """
         self.f = f
         self.gradient = gradient
         self.hessian = hessian
         self.x0 = x0
         self.maxiter = maxiter
-        self.conv_tol = conv_tol # Convergence tolerance
-        self.epsilon = epsilon # Sqrt(machine precision)
+        self.conv_tol = conv_tol
+        self.conv_criterion = conv_criterion.lower()
+        self.epsilon = epsilon
         self.L = L
         self.L0 = L0
         self.kappa_easy = kappa_easy
@@ -38,7 +59,7 @@ class CubicRegularization():
             self.hessian = self.approx_hess
         if L0 is None and L is None:
             self.L0 = np.linalg.norm(self.hessian(self.x0)-self.hessian(self.x0+np.ones_like(self.x0)), ord=2)/np.linalg.norm(np.ones_like(self.x0))+self.epsilon
-        self.lambda_nplus = self._compute_lambda_nplus(self.x0)
+        self.lambda_nplus = self._compute_lambda_nplus(self.x0)[0]
 
     def _check_inputs(self):
         """
@@ -67,6 +88,10 @@ class CubicRegularization():
                 self.hessian(self.x0)
             except TypeError:
                 raise TypeError('x0 is not a valid input to the hessian. Is the hessian a function with input dimension length(x0)?')
+        if not (self.conv_criterion == 'gradient' or self.conv_criterion == 'nesterov'):
+            raise ValueError('Invalid input for convergence criterion')
+        if self.conv_criterion == 'nesterov' and self.L is None:
+            raise ValueError("With Nesterov's convergence criterion you must specify L")
 
     @staticmethod
     def _std_basis(size, idx):
@@ -107,38 +132,50 @@ class CubicRegularization():
         Compute max(-1*smallest eigenvalue of hessian of f at x, 0)
         :param x: Point at which the hessian will be computed for use in max()
         :return: max(-1*smallest eigenvalue of hessian of f at x, 0)
+        :return: lambda_n: Smallest eigenvaleu of hessian of f at x
         """
         lambda_n = scipy.linalg.eigh(self.hessian(x), eigvals_only=True, eigvals=(0, 0))
-        return max(-lambda_n[0], 0)
+        return max(-lambda_n[0], 0), lambda_n
 
-    def _check_convergence(self, x_new):
+    def _check_convergence(self, x_new, lambda_min, M):
         """
-        Check whether the cubic regularization algorithm has converged using the criteria from Nesterov and Polyak (2006)
-        :param x_new:
-        :return:
+        Check whether the cubic regularization algorithm has converged
+        :param x_new: Point at which to check convergence
+        :param lambda_min: Minimum eigenvalue at current point
+        :param M: Current value used for M in cubic upper approximation to f at x_new
+        :return: True/False depending on whether the convergence criterion has been satisfied
         """
-        if np.linalg.norm(self.gradient(x_new))**2 <= self.conv_tol:  # TODO change convergence criterion
-            return True
-        else:
-            return False
+        if self.conv_criterion == 'gradient':
+            if np.linalg.norm(self.gradient(x_new)) <= self.conv_tol:
+                return True
+            else:
+                return False
+        elif self.conv_criterion == 'nesterov':
+            if max(np.sqrt(2/(self.L+M)*np.linalg.norm(self.gradient(x_new))), -2/(2L+M)*lambda_min) <= self.conv_tol:
+                return True
+            else:
+                return False
 
     def cubic_reg(self):
         """
         Run the cubic regularization algorithm
-        :return:
+        :return: x_new: Final point
+        :return: intermediate_points: All points visited by the cubic regularization algorithm on the way to x_new
+        :return: iter: Number of iterations of cubic regularization
         """
-        k = 0
+        iter = 0
         converged = False
         x_new = self.x0
         mk = self.L0
         intermediate_points = [x_new]
-        while k < self.maxiter and converged is False:
+        while iter < self.maxiter and converged is False:
             x_old = x_new
             x_new, mk = self._find_x_new(x_old, mk)
-            self.lambda_nplus = self._compute_lambda_nplus(x_new)
-            converged = self._check_convergence(x_new)
+            self.lambda_nplus, lambda_min = self._compute_lambda_nplus(x_new)
+            converged = self._check_convergence(x_new, lambda_min, mk)
             intermediate_points.append(x_new)
-        return x_new, intermediate_points
+            iter += 1
+        return x_new, intermediate_points, iter
 
     def _find_x_new(self, x_old, mk):
         """
@@ -149,30 +186,37 @@ class CubicRegularization():
         :return: mk: New value of M_k
         """
         if self.L is not None:
-            aux_problem = _AuxiliaryProblem(x_old, self.gradient, self.hessian, self.L, self.lambda_nplus, self.kappa_easy)
+            aux_problem = _AuxiliaryProblem(x_old, self.gradient, self.hessian, self.L, self.lambda_nplus, self.kappa_easy, self.maxiter)
             x_new = aux_problem.solve()
             return x_new, self.L
         else:
             decreased = False
-            while not decreased:
+            iter = 0
+            while not decreased and iter < self.maxiter:
                 mk *= 2
-                aux_problem = _AuxiliaryProblem(x_old, self.gradient, self.hessian, mk, self.lambda_nplus, self.kappa_easy)
+                aux_problem = _AuxiliaryProblem(x_old, self.gradient, self.hessian, mk, self.lambda_nplus, self.kappa_easy, self.maxiter)
                 x_new = aux_problem.solve()
                 decreased = (self.f(x_new)-self.f(x_old) <= 0)
+                iter += 1
+                if iter == self.maxiter:
+                    raise RuntimeError('Cound not find cubic upper approximation')
             mk = max(0.5 * mk, self.L0)
             return x_new, mk
 
 
 class _AuxiliaryProblem:
-    def __init__(self, x, gradient, hessian, M, lambda_nplus, kappa_easy):
+    """
+    Solve the cubic subproblem as described in Conn et. al (2000) (see reference at top of file)
+    The notation in this function follows that of the above reference.
+    """
+    def __init__(self, x, gradient, hessian, M, lambda_nplus, kappa_easy, maxiter):
         """
-
         :param x: Current point
         :param gradient: Gradient (as a function)
         :param hessian: Hessian (as a function)
-        :param M:
+        :param M: Current value used for M in cubic upper approximation to f at x_new
         :param lambda_nplus: max(-1*smallest eigenvalue of hessian of f at x, 0)
-        :param kappa_easy:
+        :param kappa_easy: Convergence tolerance
         """
         self.x = x
         self.gradient = gradient
@@ -180,14 +224,22 @@ class _AuxiliaryProblem:
         self.M = M
         self.lambda_nplus = lambda_nplus
         self.kappa_easy = kappa_easy
-        self.H_lambda = lambda x: self.hessian(self.x)+x*np.identity(np.size(self.hessian(self.x), 0))
+        self.maxiter = maxiter
+        # Function to compute H(x)+lambda*I as function of lambda
+        self.H_lambda = lambda lambduh: self.hessian(self.x) + lambduh*np.identity(np.size(self.hessian(self.x), 0))
+        # Constant to add to lambda_nplus so that you're not at the zero where the eigenvalue is
         self.lambda_const = (1+self.lambda_nplus)*np.sqrt(np.finfo(float).eps)
 
     def _compute_s(self, lambduh):
+        """
+        Compute L in H_lambda = LL^T and then solve LL^Ts = -g
+        :param lambduh: value for lambda in H_lambda
+        :return: s, L
+        """
         try:
             L = scipy.linalg.cholesky(self.H_lambda(lambduh))
         except:
-            # See p. 516 of Solving the Trust-Region Problem using the Lanczos Method by Gould, Lucidi, Roma, Toint (1999)
+            # See p. 516 of Gould et al. (1999) (see reference at top of file)
             self.lambda_const *= 2
             s, L = self._compute_s(self.lambda_nplus + self.lambda_const)
         s = scipy.linalg.cho_solve((L, False), -self.gradient(self.x))
@@ -195,11 +247,11 @@ class _AuxiliaryProblem:
 
     def _update_lambda(self, lambduh, s, L):
         """
-
-        :param lambduh:
-        :param s:
-        :param L:
-        :return:
+        Update lambda by taking a Newton step
+        :param lambduh: Current value of lambda
+        :param s: Current value of -(H+lambda I)^(-1)g
+        :param L: Matrix L from Cholesky factorization of H_lambda
+        :return: lambduh - phi/phi_prime: Next value of lambda
         """
         w = scipy.linalg.solve_triangular(L.T, s, lower=True)
         norm_s = np.linalg.norm(s)
@@ -210,20 +262,20 @@ class _AuxiliaryProblem:
     def _converged(self, s, lambduh):
         """
         Check whether the algorithm from the subproblem has converged
-        :param s:
-        :param lambduh:
-        :return:
+        :param s: Current estimate of -(H+ lambda I)^(-1)g
+        :param lambduh: Current estimate of lambda := Mr/2
+        :return: True/False based on whether the convergence criterion has been met
         """
         r = 2*lambduh/self.M
-        if abs(np.linalg.norm(s)-r) <= self.kappa_easy:  # TODO choose better convergence criterion
+        if abs(np.linalg.norm(s)-r) <= self.kappa_easy:
             return True
         else:
             return False
 
     def solve(self):
         """
-        Solve the cubic regularization subproblem.
-        :return: s+self.x: Next point for the cubic regulatization algorithm
+        Solve the cubic regularization subproblem. See algorithm 7.3.6 in Conn et al. (2000).
+        :return: s+self.x: Next point for the cubic regularization algorithm
         """
         if self.lambda_nplus == 0:
             lambduh = 0
@@ -242,7 +294,11 @@ class _AuxiliaryProblem:
                 return s+self.x
         if lambduh == 0:
             lambduh += self.lambda_const
-        while not self._converged(s, lambduh):
-            lambduh = self._update_lambda(lambduh, s, L)  # TODO fix this so it doesn't run forever if it doesn't converge
+        iter = 0
+        while not self._converged(s, lambduh) and iter < self.maxiter:
+            iter += 1
+            lambduh = self._update_lambda(lambduh, s, L)
             s, L = self._compute_s(lambduh)
+            if iter == self.maxiter:
+                raise RuntimeError('Could not compute s: maximum number of iterations reached')
         return s+self.x
