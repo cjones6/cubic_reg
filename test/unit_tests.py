@@ -24,7 +24,7 @@ class TestInitializations(unittest.TestCase):
 
     def test_lambdaplus(self):
         self.cr = src.cubic_reg.CubicRegularization(self.x0, self.f, gradient=self.grad, hessian=self.hess)
-        self.assertAlmostEqual(np.sqrt(73) - 7, self.cr._compute_lambda_nplus(self.x0)[0], places=10)
+        self.assertAlmostEqual(np.sqrt(73) - 7, self.cr._compute_lambda_nplus()[0], places=10)
 
 
 class TestSubproblem(unittest.TestCase):
@@ -34,7 +34,7 @@ class TestSubproblem(unittest.TestCase):
         self.hess = lambda x: np.asarray([[2 * x[1] ** 2 + 2, 4 * x[0] * x[1]], [4 * x[0] * x[1], 2 * x[0] ** 2 + 2]])
         self.x0 = [1, 2]
         self.cr = src.cubic_reg.CubicRegularization(self.x0, self.f, L=2, gradient=self.grad, hessian=self.hess)
-        self.aux_problem = src.cubic_reg._AuxiliaryProblem(self.x0, self.cr.gradient, self.cr.hessian, self.cr.L, self.cr.lambda_nplus, self.cr.kappa_easy, self.cr.maxiter)
+        self.aux_problem = src.cubic_reg._AuxiliaryProblem(self.x0, self.cr.grad_x, self.cr.hess_x, self.cr.L, self.cr.lambda_nplus, self.cr.kappa_easy, self.cr.maxiter)
 
     def test_solution(self):
         xnew = self.aux_problem.solve()
@@ -69,8 +69,8 @@ class TestHardCase(unittest.TestCase):
     # Example 4 from p. 200 of Nesterov and Polyak's paper
     def test_update(self):
         x = [0, 0]
-        gradient = lambda x: np.array([-1, 0])
-        hessian = lambda x: np.array([[0, 0],[0, -1]])
+        gradient = np.array([-1, 0])
+        hessian = np.array([[0, 0],[0, -1]])
         M = 1
         lambda_nplus = 1
         kappa_easy = 0.0001

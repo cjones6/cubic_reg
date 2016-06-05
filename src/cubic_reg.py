@@ -24,7 +24,7 @@ class CubicRegularization():
     def __init__(self, x0, f=None, gradient=None, hessian=None, L=None, L0=None, kappa_easy=0.0001, maxiter=10000, conv_tol=1e-5, conv_criterion='gradient', epsilon=2*np.sqrt(np.finfo(float).eps)):
         """
         Collect all the inputs to the cubic regularization algorithm.
-        Required inputs: function or both gradient and Hessian. If you choose conv_criterion='Nesterov', you must also supply L.
+        Required inputs: function or all of gradient and Hessian and L. If you choose conv_criterion='Nesterov', you must also supply L.
         :param x0: Starting point for cubic regularization algorithm
         :param f: Function to be minimized
         :param gradient: Gradient of f (input as a function that returns a numpy array)
@@ -59,7 +59,10 @@ class CubicRegularization():
             self.hessian = self.approx_hess
         if L0 is None and L is None:
             self.L0 = np.linalg.norm(self.hessian(self.x0)-self.hessian(self.x0+np.ones_like(self.x0)), ord=2)/np.linalg.norm(np.ones_like(self.x0))+self.epsilon
-        self.lambda_nplus = self._compute_lambda_nplus(self.x0)[0]
+
+        self.grad_x = self.gradient(self.x0)
+        self.hess_x = self.hessian(self.x0)
+        self.lambda_nplus = self._compute_lambda_nplus()[0]
 
     def _check_inputs(self):
         """
@@ -127,31 +130,29 @@ class CubicRegularization():
                 hessian[i,j] = (grad_x_plus_eps[i]-grad_x0[i])/self.epsilon
         return hessian
 
-    def _compute_lambda_nplus(self, x):
+    def _compute_lambda_nplus(self):
         """
         Compute max(-1*smallest eigenvalue of hessian of f at x, 0)
-        :param x: Point at which the hessian will be computed for use in max()
         :return: max(-1*smallest eigenvalue of hessian of f at x, 0)
         :return: lambda_n: Smallest eigenvaleu of hessian of f at x
         """
-        lambda_n = scipy.linalg.eigh(self.hessian(x), eigvals_only=True, eigvals=(0, 0))
+        lambda_n = scipy.linalg.eigh(self.hess_x, eigvals_only=True, eigvals=(0, 0))
         return max(-lambda_n[0], 0), lambda_n
 
-    def _check_convergence(self, x_new, lambda_min, M):
+    def _check_convergence(self, lambda_min, M):
         """
         Check whether the cubic regularization algorithm has converged
-        :param x_new: Point at which to check convergence
         :param lambda_min: Minimum eigenvalue at current point
         :param M: Current value used for M in cubic upper approximation to f at x_new
         :return: True/False depending on whether the convergence criterion has been satisfied
         """
         if self.conv_criterion == 'gradient':
-            if np.linalg.norm(self.gradient(x_new)) <= self.conv_tol:
+            if np.linalg.norm(self.grad_x) <= self.conv_tol:
                 return True
             else:
                 return False
         elif self.conv_criterion == 'nesterov':
-            if max(np.sqrt(2/(self.L+M)*np.linalg.norm(self.gradient(x_new))), -2/(2L+M)*lambda_min) <= self.conv_tol:
+            if max(np.sqrt(2/(self.L+M)*np.linalg.norm(self.grad_x)), -2/(2L+M)*lambda_min) <= self.conv_tol:
                 return True
             else:
                 return False
@@ -171,8 +172,10 @@ class CubicRegularization():
         while iter < self.maxiter and converged is False:
             x_old = x_new
             x_new, mk = self._find_x_new(x_old, mk)
-            self.lambda_nplus, lambda_min = self._compute_lambda_nplus(x_new)
-            converged = self._check_convergence(x_new, lambda_min, mk)
+            self.grad_x = self.gradient(x_new)
+            self.hess_x = self.hessian(x_new)
+            self.lambda_nplus, lambda_min = self._compute_lambda_nplus()
+            converged = self._check_convergence(lambda_min, mk)
             intermediate_points.append(x_new)
             iter += 1
         return x_new, intermediate_points, iter
@@ -186,17 +189,18 @@ class CubicRegularization():
         :return: mk: New value of M_k
         """
         if self.L is not None:
-            aux_problem = _AuxiliaryProblem(x_old, self.gradient, self.hessian, self.L, self.lambda_nplus, self.kappa_easy, self.maxiter)
+            aux_problem = _AuxiliaryProblem(x_old, self.grad_x, self.hess_x, self.L, self.lambda_nplus, self.kappa_easy, self.maxiter)
             x_new = aux_problem.solve()
             return x_new, self.L
         else:
             decreased = False
             iter = 0
+            f_xold = self.f(x_old)
             while not decreased and iter < self.maxiter:
                 mk *= 2
-                aux_problem = _AuxiliaryProblem(x_old, self.gradient, self.hessian, mk, self.lambda_nplus, self.kappa_easy, self.maxiter)
+                aux_problem = _AuxiliaryProblem(x_old, self.grad_x, self.hess_x, mk, self.lambda_nplus, self.kappa_easy, self.maxiter)
                 x_new = aux_problem.solve()
-                decreased = (self.f(x_new)-self.f(x_old) <= 0)
+                decreased = (self.f(x_new)-f_xold <= 0)
                 iter += 1
                 if iter == self.maxiter:
                     raise RuntimeError('Cound not find cubic upper approximation')
@@ -212,21 +216,21 @@ class _AuxiliaryProblem:
     def __init__(self, x, gradient, hessian, M, lambda_nplus, kappa_easy, maxiter):
         """
         :param x: Current point
-        :param gradient: Gradient (as a function)
-        :param hessian: Hessian (as a function)
+        :param gradient: Gradient at current point
+        :param hessian: Hessian at current point
         :param M: Current value used for M in cubic upper approximation to f at x_new
         :param lambda_nplus: max(-1*smallest eigenvalue of hessian of f at x, 0)
         :param kappa_easy: Convergence tolerance
         """
         self.x = x
-        self.gradient = gradient
-        self.hessian = hessian
+        self.grad_x = gradient
+        self.hess_x = hessian
         self.M = M
         self.lambda_nplus = lambda_nplus
         self.kappa_easy = kappa_easy
         self.maxiter = maxiter
         # Function to compute H(x)+lambda*I as function of lambda
-        self.H_lambda = lambda lambduh: self.hessian(self.x) + lambduh*np.identity(np.size(self.hessian(self.x), 0))
+        self.H_lambda = lambda lambduh: self.hess_x + lambduh*np.identity(np.size(self.hess_x, 0))
         # Constant to add to lambda_nplus so that you're not at the zero where the eigenvalue is
         self.lambda_const = (1+self.lambda_nplus)*np.sqrt(np.finfo(float).eps)
 
@@ -242,7 +246,7 @@ class _AuxiliaryProblem:
             # See p. 516 of Gould et al. (1999) (see reference at top of file)
             self.lambda_const *= 2
             s, L = self._compute_s(self.lambda_nplus + self.lambda_const)
-        s = scipy.linalg.cho_solve((L, False), -self.gradient(self.x))
+        s = scipy.linalg.cho_solve((L, False), -self.grad_x)
         return s, L
 
     def _update_lambda(self, lambduh, s, L):
@@ -288,7 +292,7 @@ class _AuxiliaryProblem:
                 return s+self.x
             else:
                 Lambda, U = np.linalg.eigh(self.H_lambda(self.lambda_nplus))
-                s_cri = -U.T.dot(np.linalg.pinv(np.diag(Lambda))).dot(U).dot(self.gradient(self.x))
+                s_cri = -U.T.dot(np.linalg.pinv(np.diag(Lambda))).dot(U).dot(self.grad_x)
                 alpha = max(np.roots([np.dot(U[:, 0], U[:, 0]), 2*np.dot(U[:, 0], s_cri), np.dot(s_cri, s_cri)-4*self.lambda_nplus**2/self.M**2]))
                 s = s_cri + alpha*U[:, 0]
                 return s+self.x
