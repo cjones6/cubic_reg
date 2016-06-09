@@ -5,7 +5,8 @@ import src.cubic_reg
 
 
 class Function:
-    def __init__(self, function='bimodal'):
+    def __init__(self, function='bimodal', method='adaptive', hessian_update='broyden'):
+        self.method = method
         if function == 'bimodal':
             self.f = lambda x: -(x[0] ** 2 + 3*x[1] ** 2)*np.exp(1-x[0] ** 2 - x[1] ** 2)
             self.grad = None
@@ -16,10 +17,21 @@ class Function:
             self.grad = lambda x: np.asarray([2*x[0]*x[1]**2 + 2*x[0], 2*x[0]**2*x[1] + 2*x[1]])
             self.hess = lambda x: np.asarray([[2*x[1]**2 + 2, 4*x[0]*x[1]], [4*x[0]*x[1], 2*x[0]**2 + 2]])
             self.x0 = np.array([1, 2])
-        self.cr = src.cubic_reg.CubicRegularization(self.x0, f=self.f, gradient=self.grad, hessian=self.hess)
+        elif function == 'quadratic':
+            self.f = lambda x: x[0]**2+x[1]**2
+            self.grad = lambda x: np.asarray([2*x[0], 2*x[1]])
+            self.hess = lambda x: np.asarray([[2, 0], [0, 2]])*1.0
+            self.x0 = [2, 2]
+        if self.method == 'adaptive':
+            self.cr = src.cubic_reg.AdaptiveCubicReg(self.x0, f=self.f, gradient=self.grad, hessian=self.hess, hessian_update_method=hessian_update, conv_tol=1e-4)
+        else:
+            self.cr = src.cubic_reg.CubicRegularization(self.x0, f=self.f, gradient=self.grad, hessian=self.hess, conv_tol=1e-4)
 
     def run(self):
-        x_opt, intermediate_points, n_iter = self.cr.cubic_reg()
+        if self.method == 'adaptive':
+            x_opt, intermediate_points, n_iter, flag = self.cr.adaptive_cubic_reg()
+        else:
+            x_opt, intermediate_points, n_iter, flag = self.cr.cubic_reg()
         return x_opt, intermediate_points, n_iter
 
     def plot_points(self, intermediate_points):
@@ -44,7 +56,14 @@ class Function:
 
 
 if __name__ == '__main__':
-    bm = Function(function='bimodal')
+    # Choose a function to run it on, and a method to use (original cubic reg or adaptive cubic reg)
+    # Function choices: 'bimodal', 'simple', 'quadratic'
+    # Method choices: 'adaptive', 'original'
+    # If you choose method='adaptive', you can choose hessian updates from 'broyden', 'rank_one', and 'exact'.
+    bm = Function(function='bimodal', method='adaptive', hessian_update='broyden')
+    # Run the algorithm on the function
     x_opt, intermediate_points, n_iter = bm.run()
     print 'Argmin of function:', x_opt
+    print intermediate_points
+    # Plot the path of the algorithm
     bm.plot_points(intermediate_points)
