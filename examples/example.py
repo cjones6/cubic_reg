@@ -64,6 +64,5 @@ if __name__ == '__main__':
     # Run the algorithm on the function
     x_opt, intermediate_points, n_iter = bm.run()
     print 'Argmin of function:', x_opt
-    print intermediate_points
     # Plot the path of the algorithm
     bm.plot_points(intermediate_points)
