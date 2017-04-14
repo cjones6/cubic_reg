@@ -9,35 +9,27 @@ Cubic regularization solves unconstrained minimization problems by minimizing a 
 
 See the example.py file for an example of how to use them and the comments in cubic_reg.py for all of the possible input options.
 Briefly, you can load the file and numpy using
-
-````
+```
 import numpy as np
 import src.cubic_reg
 ```
-
 specify your function, the gradient, Hessian, and initial point (the gradient and Hessian can be None)
-
 ```
 f = lambda x: x[0] ** 2 * x[1] ** 2 + x[0] ** 2 + x[1] ** 2
 grad = lambda x: np.asarray([2 * x[0] * x[1] ** 2 + 2 * x[0], 2 * x[0] ** 2 * x[1] + 2 * x[1]])
 hess = lambda x: np.asarray([[2 * x[1] ** 2 + 2, 4 * x[0] * x[1]], [4 * x[0] * x[1], 2 * x[0] ** 2 + 2]])
 x0 = np.array([1, 2]
 ```
-
 and then use cubic regularization by running
-
 ```
 cr = src.cubic_reg.CubicRegularization(x0, f=f, gradient=grad, hessian=hess, conv_tol=1e-4)
 x_opt, intermediate_points, n_iter, flag = cr.cubic_reg()
 ```
-
 To run adaptive cubic regularization instead, you can set
-
 ```
 cr = src.cubic_reg.AdaptiveCubicReg(x0, f=f, gradient=grad, hessian=hess, hessian_update_method='broyden', conv_tol=1e-4)
 x_opt, intermediate_points, n_iter, flag = cr.adaptive_cubic_reg()
 ```
-
 There are many other options you can specify and parameters you can control.
 
 References:
