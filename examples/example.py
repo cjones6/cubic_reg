@@ -23,9 +23,11 @@ class Function:
             self.hess = lambda x: np.asarray([[2, 0], [0, 2]])*1.0
             self.x0 = [2, 2]
         if self.method == 'adaptive':
-            self.cr = src.cubic_reg.AdaptiveCubicReg(self.x0, f=self.f, gradient=self.grad, hessian=self.hess, hessian_update_method=hessian_update, conv_tol=1e-4)
+            self.cr = src.cubic_reg.AdaptiveCubicReg(self.x0, f=self.f, gradient=self.grad, hessian=self.hess,
+                                                     hessian_update_method=hessian_update, conv_tol=1e-4)
         else:
-            self.cr = src.cubic_reg.CubicRegularization(self.x0, f=self.f, gradient=self.grad, hessian=self.hess, conv_tol=1e-4)
+            self.cr = src.cubic_reg.CubicRegularization(self.x0, f=self.f, gradient=self.grad, hessian=self.hess,
+                                                        conv_tol=1e-4)
 
     def run(self):
         if self.method == 'adaptive':
@@ -63,6 +65,6 @@ if __name__ == '__main__':
     bm = Function(function='bimodal', method='adaptive', hessian_update='broyden')
     # Run the algorithm on the function
     x_opt, intermediate_points, n_iter = bm.run()
-    print 'Argmin of function:', x_opt
+    print('Argmin of function:', x_opt)
     # Plot the path of the algorithm
     bm.plot_points(intermediate_points)

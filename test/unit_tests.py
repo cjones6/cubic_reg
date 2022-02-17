@@ -1,5 +1,5 @@
-import unittest2 as unittest
 import numpy as np
+import unittest
 
 import src.cubic_reg
 
@@ -34,7 +34,8 @@ class TestSubproblem(unittest.TestCase):
         self.hess = lambda x: np.asarray([[2 * x[1] ** 2 + 2, 4 * x[0] * x[1]], [4 * x[0] * x[1], 2 * x[0] ** 2 + 2]])
         self.x0 = [1, 2]
         self.cr = src.cubic_reg.CubicRegularization(self.x0, self.f, L=2, gradient=self.grad, hessian=self.hess)
-        self.aux_problem = src.cubic_reg._AuxiliaryProblem(self.x0, self.cr.grad_x, self.cr.hess_x, self.cr.L, self.cr.lambda_nplus, self.cr.kappa_easy, self.cr.maxiter)
+        self.aux_problem = src.cubic_reg._AuxiliaryProblem(self.x0, self.cr.grad_x, self.cr.hess_x, self.cr.L,
+                                                           self.cr.lambda_nplus, self.cr.kappa_easy, self.cr.maxiter)
 
     def test_solution(self):
         s, flag = self.aux_problem.solve()
@@ -50,17 +51,22 @@ class TestCubicReg(unittest.TestCase):
         self.x0 = [1, 2]
 
     def test_cr(self):
-        x_new, intermediate_points, k, flag = src.cubic_reg.CubicRegularization(self.x0, self.f, L=2, gradient=self.grad, hessian=self.hess, conv_criterion='Nesterov').cubic_reg()
+        x_new, intermediate_points, k, flag = src.cubic_reg.CubicRegularization(self.x0, self.f, L=2,
+                                                                                gradient=self.grad, hessian=self.hess,
+                                                                                conv_criterion='Nesterov').cubic_reg()
         self.assertAlmostEqual(0, x_new[0], places=4)
         self.assertAlmostEqual(0, x_new[1], places=4)
 
     def test_cr_L0_given(self):
-        x_new, intermediate_points, k, flag = src.cubic_reg.CubicRegularization(self.x0, self.f, L0=0.01, gradient=self.grad, hessian=self.hess).cubic_reg()
+        x_new, intermediate_points, k, flag = src.cubic_reg.CubicRegularization(self.x0, self.f, L0=0.01,
+                                                                                gradient=self.grad,
+                                                                                hessian=self.hess).cubic_reg()
         self.assertAlmostEqual(0, x_new[0], places=3)
         self.assertAlmostEqual(0, x_new[1], places=3)
 
     def test_cr_L0_bound(self):
-        x_new, intermediate_points, k, flag = src.cubic_reg.CubicRegularization(self.x0, self.f, gradient=self.grad, hessian=self.hess).cubic_reg()
+        x_new, intermediate_points, k, flag = src.cubic_reg.CubicRegularization(self.x0, self.f, gradient=self.grad,
+                                                                                hessian=self.hess).cubic_reg()
         self.assertAlmostEqual(0, x_new[0], places=3)
         self.assertAlmostEqual(0, x_new[1], places=3)
 
@@ -88,11 +94,7 @@ class TestAdaptiveCubicReg(unittest.TestCase):
         self.x0 = [1, 2]
 
     def test_cr(self):
-        x_new, intermediate_points, k, flag = src.cubic_reg.AdaptiveCubicReg(self.x0, self.f, L=2, gradient=self.grad, hessian=self.hess).adaptive_cubic_reg()
+        x_new, intermediate_points, k, flag = src.cubic_reg.AdaptiveCubicReg(self.x0, self.f, L=2, gradient=self.grad,
+                                                                             hessian=self.hess).adaptive_cubic_reg()
         self.assertAlmostEqual(0, x_new[0], places=4)
         self.assertAlmostEqual(0, x_new[1], places=4)
-
-
-
-
-

@@ -24,10 +24,12 @@ import scipy.linalg
 
 
 class Algorithm:
-    def __init__(self, x0, f=None, gradient=None, hessian=None, L=None, L0=None, kappa_easy=0.0001, maxiter=10000, submaxiter=100000, conv_tol=1e-5, conv_criterion='gradient', epsilon=2*np.sqrt(np.finfo(float).eps)):
+    def __init__(self, x0, f=None, gradient=None, hessian=None, L=None, L0=None, kappa_easy=0.0001, maxiter=10000,
+                 submaxiter=100000, conv_tol=1e-5, conv_criterion='gradient', epsilon=2*np.sqrt(np.finfo(float).eps)):
         """
         Collect all the inputs to the cubic regularization algorithm.
-        Required inputs: function or all of gradient and Hessian and L. If you choose conv_criterion='Nesterov', you must also supply L.
+        Required inputs: function or all of gradient and Hessian and L. If you choose conv_criterion='Nesterov', you
+        must also supply L.
         :param x0: Starting point for cubic regularization algorithm
         :param f: Function to be minimized
         :param gradient: Gradient of f (input as a function that returns a numpy array)
@@ -79,7 +81,8 @@ class Algorithm:
             raise ValueError('x0 must have length > 0')
         if not (self.f is not None or (self.gradient is not None and self.hessian is not None and self.L is not None)):
             raise AttributeError('You must specify f and/or each of the following: gradient, hessian, and L')
-        if not((not self.L or self.L > 0)and (not self.L0 or self.L0 > 0) and self.kappa_easy > 0 and self.maxiter > 0 and self.conv_tol > 0 and self.epsilon > 0):
+        if not((not self.L or self.L > 0)and (not self.L0 or self.L0 > 0) and self.kappa_easy > 0 and self.maxiter > 0
+               and self.conv_tol > 0 and self.epsilon > 0):
             raise ValueError('All inputs that are constants must be larger than 0')
         if self.f is not None:
             try:
@@ -90,12 +93,14 @@ class Algorithm:
             try:
                 self.gradient(self.x0)
             except TypeError:
-                raise TypeError('x0 is not a valid input to the gradient. Is the gradient a function with input dimension length(x0)?')
+                raise TypeError('x0 is not a valid input to the gradient. Is the gradient a function with input '
+                                'dimension length(x0)?')
         if self.hessian is not None:
             try:
                 self.hessian(self.x0)
             except TypeError:
-                raise TypeError('x0 is not a valid input to the hessian. Is the hessian a function with input dimension length(x0)?')
+                raise TypeError('x0 is not a valid input to the hessian. Is the hessian a function with input dimension '
+                                'length(x0)?')
         if not (self.conv_criterion == 'gradient' or self.conv_criterion == 'nesterov'):
             raise ValueError('Invalid input for convergence criterion')
         if self.conv_criterion == 'nesterov' and self.L is None:
@@ -119,7 +124,8 @@ class Algorithm:
         :param x: Point at which the gradient will be approximated
         :return: Estimated gradient at x
         """
-        return np.asarray([(self.f(x + self.epsilon * self._std_basis(self.n, i)) - self.f(x - self.epsilon * self._std_basis(self.n, i))) / (2 * self.epsilon) for i in range(0, self.n)])
+        return np.asarray([(self.f(x + self.epsilon * self._std_basis(self.n, i)) -
+                            self.f(x - self.epsilon * self._std_basis(self.n, i))) / (2 * self.epsilon) for i in range(0, self.n)])
 
     def approx_hess(self, x):
         """
@@ -132,7 +138,7 @@ class Algorithm:
         for j in range(0, self.n):
             grad_x_plus_eps = self.gradient(x + self.epsilon * self._std_basis(self.n, j))
             for i in range(0, self.n):
-                hessian[i,j] = (grad_x_plus_eps[i]-grad_x0[i])/self.epsilon
+                hessian[i, j] = (grad_x_plus_eps[i]-grad_x0[i])/self.epsilon
         return hessian
 
     def _compute_lambda_nplus(self):
@@ -157,15 +163,18 @@ class Algorithm:
             else:
                 return False
         elif self.conv_criterion == 'nesterov':
-            if max(np.sqrt(2/(self.L+M)*np.linalg.norm(self.grad_x)), -2/(2L+M)*lambda_min) <= self.conv_tol:
+            if max(np.sqrt(2/(self.L+M)*np.linalg.norm(self.grad_x)), -2/(2*self.L+M)*lambda_min) <= self.conv_tol:
                 return True
             else:
                 return False
 
 
 class CubicRegularization(Algorithm):
-    def __init__(self, x0, f=None, gradient=None, hessian=None, L=None, L0=None, kappa_easy=0.0001, maxiter=10000, submaxiter=10000, conv_tol=1e-5, conv_criterion='gradient', epsilon=2*np.sqrt(np.finfo(float).eps)):
-        Algorithm.__init__(self, x0, f=f, gradient=gradient, hessian=hessian, L=L, L0=L0, kappa_easy=kappa_easy, maxiter=maxiter, submaxiter=submaxiter, conv_tol=conv_tol, conv_criterion=conv_criterion, epsilon=epsilon)
+    def __init__(self, x0, f=None, gradient=None, hessian=None, L=None, L0=None, kappa_easy=0.0001, maxiter=10000,
+                 submaxiter=10000, conv_tol=1e-5, conv_criterion='gradient', epsilon=2*np.sqrt(np.finfo(float).eps)):
+        Algorithm.__init__(self, x0, f=f, gradient=gradient, hessian=hessian, L=L, L0=L0, kappa_easy=kappa_easy,
+                           maxiter=maxiter, submaxiter=submaxiter, conv_tol=conv_tol, conv_criterion=conv_criterion,
+                           epsilon=epsilon)
 
     def cubic_reg(self):
         """
@@ -180,14 +189,15 @@ class CubicRegularization(Algorithm):
         mk = self.L0
         intermediate_points = [x_new]
         while iter < self.maxiter and converged is False:
-            x_old = x_new
+            x_old = x_new.copy()
             x_new, mk, flag = self._find_x_new(x_old, mk)
             self.grad_x = self.gradient(x_new)
             self.hess_x = self.hessian(x_new)
             self.lambda_nplus, lambda_min = self._compute_lambda_nplus()
             converged = self._check_convergence(lambda_min, mk)
             if flag != 0:
-                print RuntimeWarning('Convergence criteria not met, likely due to round-off error or ill-conditioned Hessian.')
+                print(RuntimeWarning('Convergence criteria not met, likely due to round-off error or ill-conditioned '
+                                     'Hessian.'))
                 return x_new, intermediate_points, iter, flag
             intermediate_points.append(x_new)
             iter += 1
@@ -202,7 +212,8 @@ class CubicRegularization(Algorithm):
         :return: mk: New value of M_k
         """
         if self.L is not None:
-            aux_problem = _AuxiliaryProblem(x_old, self.grad_x, self.hess_x, self.L, self.lambda_nplus, self.kappa_easy, self.submaxiter)
+            aux_problem = _AuxiliaryProblem(x_old, self.grad_x, self.hess_x, self.L, self.lambda_nplus, self.kappa_easy,
+                                            self.submaxiter)
             s, flag = aux_problem.solve()
             x_new = s+x_old
             return x_new, self.L, flag
@@ -212,7 +223,8 @@ class CubicRegularization(Algorithm):
             f_xold = self.f(x_old)
             while not decreased and iter < self.submaxiter:
                 mk *= 2
-                aux_problem = _AuxiliaryProblem(x_old, self.grad_x, self.hess_x, mk, self.lambda_nplus, self.kappa_easy, self.submaxiter)
+                aux_problem = _AuxiliaryProblem(x_old, self.grad_x, self.hess_x, mk, self.lambda_nplus, self.kappa_easy,
+                                                self.submaxiter)
                 s, flag = aux_problem.solve()
                 x_new = s+x_old
                 decreased = (self.f(x_new)-f_xold <= 0)
@@ -224,8 +236,12 @@ class CubicRegularization(Algorithm):
 
 
 class AdaptiveCubicReg(Algorithm):
-    def __init__(self, x0, f, gradient=None, hessian=None, L=None, L0=None, sigma0=1, eta1=0.1, eta2=0.9, kappa_easy=0.0001, maxiter=10000, submaxiter=10000, conv_tol=1e-5, hessian_update_method='exact', conv_criterion='gradient', epsilon=2*np.sqrt(np.finfo(float).eps)):
-        Algorithm.__init__(self, x0, f=f, gradient=gradient, hessian=hessian, L=sigma0/2, L0=L0, kappa_easy=kappa_easy, maxiter=maxiter, submaxiter=submaxiter, conv_tol=conv_tol, conv_criterion=conv_criterion, epsilon=epsilon)
+    def __init__(self, x0, f, gradient=None, hessian=None, L=None, L0=None, sigma0=1, eta1=0.1, eta2=0.9,
+                 kappa_easy=0.0001, maxiter=10000, submaxiter=10000, conv_tol=1e-5, hessian_update_method='exact',
+                 conv_criterion='gradient', epsilon=2*np.sqrt(np.finfo(float).eps)):
+        Algorithm.__init__(self, x0, f=f, gradient=gradient, hessian=hessian, L=sigma0/2, L0=L0, kappa_easy=kappa_easy,
+                           maxiter=maxiter, submaxiter=submaxiter, conv_tol=conv_tol, conv_criterion=conv_criterion,
+                           epsilon=epsilon)
         self.sigma = sigma0
         self.eta1 = eta1
         self.eta2 = eta2
@@ -253,7 +269,8 @@ class AdaptiveCubicReg(Algorithm):
                 if np.linalg.norm(r) != 0:
                     self.hess_x += np.outer(r, r)/np.dot(r, s)
             else:
-                raise NotImplementedError("Hessian update method'+method+'not implemented. Try 'exact', 'broyden', or 'rank_one'.")
+                raise NotImplementedError("Hessian update method'+method+'not implemented. Try 'exact', 'broyden', or "
+                                          "'rank_one'.")
 
     def _m(self, f_x, s):
         """
@@ -299,12 +316,12 @@ class AdaptiveCubicReg(Algorithm):
         """
         converged = False
         x_new = self.x0
-        f_xold = self.f(x_new)
         fail = flag = 0
         while self.iter < self.maxiter and converged is False:
-            x_old = x_new
-            aux_problem = _AuxiliaryProblem(x_old, self.grad_x, self.hess_x, 2*self.sigma, self.lambda_nplus, self.kappa_easy,
-                                            self.submaxiter)
+            x_old = x_new.copy()
+            f_xold = self.f(x_old)
+            aux_problem = _AuxiliaryProblem(x_old, self.grad_x, self.hess_x, 2*self.sigma, self.lambda_nplus,
+                                            self.kappa_easy, self.submaxiter)
             s, flag = aux_problem.solve()
             if flag == 0:
                 fail = 0
@@ -319,7 +336,8 @@ class AdaptiveCubicReg(Algorithm):
                 self.hess_x = self.hessian(x_old)
                 self.lambda_nplus, lambda_min = self._compute_lambda_nplus()
             else:
-                print RuntimeWarning('Convergence criteria not met, likely due to round-off error or ill-conditioned Hessian.')
+                print(RuntimeWarning('Convergence criteria not met, likely due to round-off error or ill-conditioned '
+                                     'Hessian.'))
                 return x_new, self.intermediate_points, self.iter, flag
         return x_new, self.intermediate_points, self.iter, flag
 
@@ -415,7 +433,8 @@ class _AuxiliaryProblem:
             else:
                 Lambda, U = np.linalg.eigh(self.H_lambda(self.lambda_nplus))
                 s_cri = -U.T.dot(np.linalg.pinv(np.diag(Lambda))).dot(U).dot(self.grad_x)
-                alpha = max(np.roots([np.dot(U[:, 0], U[:, 0]), 2*np.dot(U[:, 0], s_cri), np.dot(s_cri, s_cri)-4*self.lambda_nplus**2/self.M**2]))
+                alpha = max(np.roots([np.dot(U[:, 0], U[:, 0]),
+                                      2*np.dot(U[:, 0], s_cri), np.dot(s_cri, s_cri)-4*self.lambda_nplus**2/self.M**2]))
                 s = s_cri + alpha*U[:, 0]
                 return s, 0
         if lambduh == 0:
@@ -428,5 +447,5 @@ class _AuxiliaryProblem:
             if flag != 0:
                 return s, flag
             if iter == self.maxiter:
-                print RuntimeWarning('Warning: Could not compute s: maximum number of iterations reached')
+                print(RuntimeWarning('Warning: Could not compute s: maximum number of iterations reached'))
         return s, 0
