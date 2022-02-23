@@ -432,7 +432,7 @@ class _AuxiliaryProblem:
                 return s, 0
             else:
                 Lambda, U = np.linalg.eigh(self.H_lambda(self.lambda_nplus))
-                s_cri = -U.T.dot(np.linalg.pinv(np.diag(Lambda))).dot(U).dot(self.grad_x)
+                s_cri = -U.dot(np.linalg.pinv(np.diag(Lambda))).dot(U.T).dot(self.grad_x)
                 alpha = max(np.roots([np.dot(U[:, 0], U[:, 0]),
                                       2*np.dot(U[:, 0], s_cri), np.dot(s_cri, s_cri)-4*self.lambda_nplus**2/self.M**2]))
                 s = s_cri + alpha*U[:, 0]
